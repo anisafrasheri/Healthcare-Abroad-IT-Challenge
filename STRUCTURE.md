@@ -93,23 +93,3 @@ auditRepository.ts
 triageService.test.ts
   └── triageService.ts  (TriageOutputSchema only)
 ```
-
-No circular imports. The AI service and the repositories never import each other.
-
----
-
-## Files you are adding vs files that already exist
-
-| File | Status |
-|------|--------|
-| `src/types/triage.ts` | New |
-| `src/lib/auth/permissions.ts` | New |
-| `src/lib/ai/triageService.ts` | New |
-| `src/lib/ai/triageService.test.ts` | New |
-| `src/lib/db/triageRepository.ts` | New |
-| `src/lib/db/auditRepository.ts` | New |
-| `src/app/api/admin/case-triage/[id]/analyze/route.ts` | New |
-| `src/components/admin/CaseTriagePanel.tsx` | New |
-| `src/lib/db/client.ts` | Already exists — do not modify |
-| `.env.local` | Already exists — add `ANTHROPIC_API_KEY` |
-| `README.md` | Already exists — add the triage section |
