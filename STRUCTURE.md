@@ -1,7 +1,7 @@
 # File Structure
 
 ```
-your-nextjs-project/
+Healthcare-Abroad-IT-Challenge/
 │
 ├── src/
 │   │
