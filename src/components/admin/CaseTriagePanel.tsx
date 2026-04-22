@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { TriageResult } from "@/types/triage";
 
 interface Props {
@@ -8,7 +8,7 @@ interface Props {
   noteText: string;
 }
 
-type UIState = "idle" | "loading" | "streaming" | "success" | "error";
+type UIState = "idle" | "loading" | "success" | "error";
 
 const PRIORITY_STYLES: Record<string, { background: string; color: string }> = {
   Critical: { background: "#FCEBEB", color: "#A32D2D" },
@@ -18,98 +18,48 @@ const PRIORITY_STYLES: Record<string, { background: string; color: string }> = {
 };
 
 export function CaseTriagePanel({ caseId, noteText }: Props) {
-  const [state, setState] = useState<UIState>("idle");
-  const [result, setResult] = useState<TriageResult | null>(null);
-  const [streamText, setStreamText] = useState<string>("");
+  const [state, setState]       = useState<UIState>("idle");
+  const [result, setResult]     = useState<TriageResult | null>(null);
   const [errorMsg, setErrorMsg] = useState<string>("");
-  const abortRef = useRef<AbortController | null>(null);
 
   async function handleAnalyze() {
-    setState("streaming");
+    setState("loading");
     setResult(null);
-    setStreamText("");
     setErrorMsg("");
-
-    abortRef.current = new AbortController();
 
     try {
       const res = await fetch(`/api/admin/case-triage/${caseId}/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ noteText, stream: true }),
-        signal: abortRef.current.signal,
+        // Non-streaming by default — guaranteed structured TriageResult response
+        body: JSON.stringify({ noteText }),
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        const data = await res.json();
         throw new Error(data?.error ?? "Unexpected error from server");
       }
 
-      // Read the stream and accumulate
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder();
-      let accumulated = "";
-
-      while (reader) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        accumulated += decoder.decode(value, { stream: true });
-        setStreamText(accumulated);
-      }
-
-      // Parse the final accumulated JSON into a result
-      const parsed = JSON.parse(accumulated) as TriageResult;
-      setResult(parsed);
+      setResult(data as TriageResult);
       setState("success");
     } catch (err) {
-      if ((err as Error).name === "AbortError") {
-        setState("idle");
-        return;
-      }
       setErrorMsg(err instanceof Error ? err.message : "Something went wrong");
       setState("error");
     }
-  }
-
-  function handleCancel() {
-    abortRef.current?.abort();
   }
 
   const priorityStyle = result ? PRIORITY_STYLES[result.priority] : null;
 
   return (
     <div style={{ fontFamily: "var(--font-sans)" }}>
-      <div style={{ display: "flex", gap: "8px", marginBottom: "1rem" }}>
-        <button
-          onClick={handleAnalyze}
-          disabled={state === "streaming" || state === "loading"}
-        >
-          {state === "streaming" ? "Analysing…" : "Run triage analysis"}
-        </button>
-        {state === "streaming" && (
-          <button onClick={handleCancel} style={{ color: "var(--color-text-danger)" }}>
-            Cancel
-          </button>
-        )}
-      </div>
-
-      {/* Streaming raw text preview */}
-      {state === "streaming" && streamText && (
-        <div style={{
-          padding: "12px 16px",
-          background: "var(--color-background-secondary)",
-          borderRadius: "var(--border-radius-md)",
-          fontSize: "13px",
-          fontFamily: "var(--font-mono)",
-          color: "var(--color-text-secondary)",
-          marginBottom: "1rem",
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-all",
-        }}>
-          {streamText}
-          <span style={{ opacity: 0.4 }}>▋</span>
-        </div>
-      )}
+      <button
+        onClick={handleAnalyze}
+        disabled={state === "loading"}
+        style={{ marginBottom: "1rem" }}
+      >
+        {state === "loading" ? "Analysing…" : "Run triage analysis"}
+      </button>
 
       {state === "error" && (
         <div style={{
@@ -131,7 +81,6 @@ export function CaseTriagePanel({ caseId, noteText }: Props) {
           borderRadius: "var(--border-radius-lg)",
           padding: "1rem 1.25rem",
         }}>
-          {/* Priority badge */}
           <div style={{ marginBottom: "12px" }}>
             <span style={{
               display: "inline-block",
@@ -146,7 +95,6 @@ export function CaseTriagePanel({ caseId, noteText }: Props) {
             </span>
           </div>
 
-          {/* Summary */}
           <p style={{
             fontSize: "15px",
             color: "var(--color-text-primary)",
@@ -156,7 +104,6 @@ export function CaseTriagePanel({ caseId, noteText }: Props) {
             {result.summary}
           </p>
 
-          {/* Tags */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "12px" }}>
             {result.tags.map(tag => (
               <span key={tag} style={{
@@ -172,7 +119,6 @@ export function CaseTriagePanel({ caseId, noteText }: Props) {
             ))}
           </div>
 
-          {/* Confidence + metadata */}
           <div style={{
             borderTop: "0.5px solid var(--color-border-tertiary)",
             paddingTop: "12px",
