@@ -9,7 +9,7 @@ An AI-powered triage feature for admin users built with Next.js (App Router), Ty
 ### 1. Install dependencies
 
 ```bash
-npm install zod
+npm install
 ```
 
 ### 2. Environment variable
@@ -22,7 +22,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 ### 3. Database migrations
 
-The SQL for both tables lives as comments at the top of their respective repository files. Copy each `CREATE TABLE` block into your migration tool.
+The SQL for both tables lives as comments at the top of their repository files. Copy each `CREATE TABLE` block into your migration tool.
 
 - `src/lib/db/triageRepository.ts` → creates `case_triage_results`
 - `src/lib/db/auditRepository.ts` → creates `triage_audit_log`
@@ -40,11 +40,17 @@ Adjust `src/lib/auth/permissions.ts` if your session shape differs.
 
 ## Running the tests
 
+### Unit tests (Zod schema — no DB or API key needed)
+
 ```bash
-npx vitest run src/lib/ai/triageService.test.ts
+npm test
 ```
 
-No database or API key required — tests run against the Zod schema directly. All 30 cases should pass.
+### Integration tests (route flow with mocked dependencies)
+
+```bash
+npx vitest run src/app/api/admin/case-triage/\\[id\\]/analyze/route.integration.test.ts
+```
 
 ---
 
@@ -61,7 +67,7 @@ import { CaseTriagePanel } from "@/components/admin/CaseTriagePanel";
 />
 ```
 
-The component manages loading, streaming, error, and success states internally.
+The component manages loading, error, and success states internally. It uses the non-streaming path by default for a consistent, fully structured response.
 
 ---
 
@@ -71,18 +77,17 @@ The component manages loading, streaming, error, and success states internally.
 POST /api/admin/case-triage/:caseId/analyze
 ```
 
-**Request body:**
+### Request body
 
 ```json
 {
-  "noteText": "Patient presented with...",
-  "stream": true
+  "noteText": "Patient presented with..."
 }
 ```
 
-Set `stream: false` or omit it for a standard JSON response.
+Add `"stream": true` to opt into the streaming path (returns chunked text; for advanced use only).
 
-**Response (non-streaming, 200):**
+### Response (200)
 
 ```json
 {
@@ -96,13 +101,13 @@ Set `stream: false` or omit it for a standard JSON response.
 }
 ```
 
-**Error responses:**
+### Error responses
 
 | Status | Meaning |
 |--------|---------|
 | 400 | Missing or invalid request body |
 | 401 | Not authenticated |
-| 403 | Not admin, or missing triage:write permission |
+| 403 | Not admin, or missing `triage:write` permission |
 | 502 | AI service failed or returned invalid output |
 
 ---
@@ -110,13 +115,13 @@ Set `stream: false` or omit it for a standard JSON response.
 ## Architecture
 
 ```
-CaseTriagePanel.tsx        → UI: triggers analysis, renders all states
-route.ts                   → Orchestration: auth → input → AI → DB → response
-triageService.ts           → AI: Anthropic call, Zod validation, retry logic
-triageRepository.ts        → Persistence: successful results
-auditRepository.ts         → Persistence: every attempt including failures
-permissions.ts             → Auth: admin role + permission check
-types/triage.ts            → Shared TypeScript types
+CaseTriagePanel.tsx        UI: triggers analysis, renders all states
+route.ts                   Orchestration: auth → input → AI → DB → response
+triageService.ts           AI: Anthropic call, Zod validation, retry logic
+triageRepository.ts        Persistence: successful results
+auditRepository.ts         Persistence: every attempt including failures
+permissions.ts             Auth: admin role + permission check
+types/triage.ts            Shared TypeScript types
 ```
 
 ---
@@ -132,6 +137,5 @@ types/triage.ts            → Shared TypeScript types
 ## What was intentionally left out
 
 - **Per-user rate limiting** — would use Redis middleware in production
-- **Integration tests** — unit tests cover the validator; route-level tests are the next target
-- **Progressive streaming** — the client currently streams raw JSON tokens; a JSON streaming parser would render each field as it completes
+- **Progressive streaming UI** — the client uses the non-streaming path by default; streaming exists as opt-in but renders raw tokens rather than parsed fields
 - **Toast notifications** — errors are shown inline; a toast system would be less disruptive in a multi-panel admin UI
