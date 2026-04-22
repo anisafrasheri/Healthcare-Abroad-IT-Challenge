@@ -35,6 +35,7 @@ export async function POST(
   try {
     const body = await req.json();
     noteText = body?.noteText;
+    // Streaming is explicit opt-in — default is the structured JSON path
     stream = body?.stream === true;
     if (!noteText?.trim()) throw new Error("empty");
   } catch {
@@ -44,7 +45,7 @@ export async function POST(
     );
   }
 
-  // 3a. Streaming path
+  // 3a. Streaming path — opt-in only, not the UI default
   if (stream) {
     try {
       const readable = await analyzeCaseStream(
@@ -71,11 +72,8 @@ export async function POST(
     } catch (err) {
       console.error("[analyze route] Stream setup failed:", err);
       await writeAuditLog({
-        caseId,
-        userId: user.id,
-        success: false,
-        errorReason: String(err),
-        durationMs: Date.now() - startedAt,
+        caseId, userId: user.id, success: false,
+        errorReason: String(err), durationMs: Date.now() - startedAt,
       }).catch(() => {});
       return NextResponse.json(
         { error: "Analysis failed. Please try again or contact support." },
@@ -84,18 +82,16 @@ export async function POST(
     }
   }
 
-  // 3b. Non-streaming path
+  // 3b. Non-streaming path — primary contract
+  // Always returns a fully validated TriageResult JSON object
   let result;
   try {
     result = await analyzeCase(noteText, caseId);
   } catch (err) {
     console.error("[analyze route] AI error:", err);
     await writeAuditLog({
-      caseId,
-      userId: user.id,
-      success: false,
-      errorReason: String(err),
-      durationMs: Date.now() - startedAt,
+      caseId, userId: user.id, success: false,
+      errorReason: String(err), durationMs: Date.now() - startedAt,
     }).catch(() => {});
     return NextResponse.json(
       { error: "Analysis failed. Please try again or contact support." },
@@ -103,19 +99,16 @@ export async function POST(
     );
   }
 
-  // 4. Persist result
+  // 4. Persist — non-fatal if DB write fails
   try {
     await saveTriageResult(result, user.id);
   } catch (err) {
-    // Non-fatal: return result to UI even if DB write fails
     console.error("[analyze route] DB persist failed:", err);
   }
 
   // 5. Audit log — success
   await writeAuditLog({
-    caseId,
-    userId: user.id,
-    success: true,
+    caseId, userId: user.id, success: true,
     durationMs: Date.now() - startedAt,
   }).catch(() => {});
 
